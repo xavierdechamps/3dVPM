@@ -12,7 +12,7 @@ private:
     /** @brief pointer to a surface  */
     std::shared_ptr<Surface> lifting_surface;
 
-    /** @brief doublet strength os the wake panels */
+    /** @brief doublet strength of the wake panels */
     std::vector<double> doublet_strength;
 
 public:
@@ -31,6 +31,9 @@ public:
     /** @brief adds a row of wake panels */
     void shed_wake(const vector3d& free_stream_velocity, double dt);
 
+    void push_back_doublet_strength(const double &doublet) ;
+    void pop_front_double_strength();
+    int get_size_doublet_strength() const;
 };
 
 #endif // WAKE_H

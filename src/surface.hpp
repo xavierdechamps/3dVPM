@@ -10,6 +10,11 @@
 #include "vector3d.h"
 #include "parameters.hpp"
 
+#ifdef COMP_WINDOWS
+#define _USE_MATH_DEFINES
+#include <math.h>
+#include <windows.h>
+#endif
 /**
    Class for containing geometry entities and functions to perform operations on them
 
@@ -36,16 +41,25 @@ public:
      *
      * stores neighbouring panel ids - required in surface velocity calculations
      */
-    std::vector<std::vector<int>> panel_neighbours;
+    std::vector<std::vector<int>> panel_neighbours; // for the evaluation of the velocity with the Least Square Method
+    std::vector<std::vector<int>> neighbours_two; // for the evaluation of the potential gradient with second order finite differences
 
-    /** @brief nodes on trailing edge */
+    /** @brief nodes on leading / trailing edge */
+    std::vector<int> leading_edge_nodes;
     std::vector<int> trailing_edge_nodes;
 
+    /** @brief nodes on the beam at chord/4 */
+    std::vector<vector3d> beam_nodes;
+    std::vector<vector3d> beam_nodes_collocation;
+    
     /** @brief panels connected to upper trailing edge */
     std::vector<int> upper_TE_panels;
 
     /** @brief panels connected to lower trailing edge */
     std::vector<int> lower_TE_panels;
+
+    /** @brief panels connected to a trailing edge */
+    std::vector<int> is_TE_panel; // = 1 when on upper face, = -1 when on lower face, = 0 if not at TE
 
     /** @brief returns number of panels in the current surface
      *  @param[out] int     total number of panels in the surface */
@@ -62,6 +76,10 @@ public:
       */
     void compute_panel_components();
 
+    /** @brief Computes the distances to the 4 neighbours panels */
+    void compute_neighbour_distances(const int panel, std::vector<vector3d> &dist_neighbours) const ;
+    void get_local_neighbours(const int panel, std::vector<int> &local_neighbours) const ;
+    
     /** @brief returns panel's collocation point by reference
      *
      *  @param[in]  panel       panel number
@@ -84,6 +102,7 @@ public:
      * @param[in] dTheta    angle by which to rorate the surface
      * @param[in] isRadian  true if \b dTheta is in radians, false otherwise */
     void rotate_surface(vector3d dTheta, bool isRadian);
+    void rotate_section_about_arbitrary_point(const vector3d center, const vector3d dTheta,const int section, const bool isRadian);
 
     /** @brief Set the linear velocity of the surface */
     void set_linear_velocity(const vector3d&);
@@ -114,7 +133,11 @@ public:
 
     /** @brief return panel's normal vector */
     vector3d get_panel_normal(const int) const;
-
+    vector3d get_panel_longitudinal(const int) const;
+    vector3d get_panel_transverse(const int) const;
+    
+//    std::vector<vector3d> panel_tangents; // TO REMOVE
+    
     /** @brief computes the influence coefficient due to source panel
      *
      * @param[in] panel  source panel whose influence is sought
@@ -160,13 +183,21 @@ public:
      * @param[in] panel  doublet panel
      * @param[in] node   point at which induced velocity by \b panel is sought
      * @param[in] vector3d    return induced velocity vector */
-    vector3d compute_doublet_panel_unit_velocity(const int& panel, const vector3d& node) const;
+    vector3d compute_doublet_panel_unit_velocity(const int& panel, const vector3d& node, const double time) const;
 
+	void set_name_surface(const std::string name) ;
+	std::string get_name_surface() const;
+	void set_IMAX_JMAX(const int im, const int jm);
+	void get_IMAX_JMAX(int &im, int &jm) const;
+    
 private:
-
+// name of the surface
+    std::string name_surface;	 
     /** @brief represents " 1 / (4*pi)" */
     const double fourpi;
 
+    int IMAX,JMAX; // number of nodes along chord (up+down) and along span
+    
     /** @brief collocation points of the panels
      *
      * Stores the collocation point for each panel */
@@ -237,7 +268,7 @@ private:
      * @param[in] node_a  one node of the edge
      * @param[in] node_b  other node of the edge
      * @param[in] vector3d    return induced velocity vector due to panel edge */
-    vector3d compute_doublet_panel_edge_unit_velocity(const vector3d& node_a,const vector3d& node_b,const vector3d& x) const;
+    vector3d compute_doublet_panel_edge_unit_velocity(const vector3d& node_a,const vector3d& node_b,const vector3d& x, const double time) const;
 
 
 };

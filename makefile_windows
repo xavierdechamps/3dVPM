@@ -1,0 +1,70 @@
+D_drive=D:
+C_drive=C:
+petsc_dir=$(D_drive)/Libraries/petsc-3.10.2
+mpi_dir=$(D_drive)/Libraries/impi
+mkl_dir=$(C_drive)/Progra~2/Intel/IntelSWTools/compilers_and_libraries_2018.1.156/windows/mkl
+#mkl_dir=$(C_drive)/Progra~2/Intel/IntelSWTools/compilers_and_libraries_2018.1.156/windows/mkl/lib/intel64_win
+
+HOME_dir=$(D_drive)/FSI/3dVPM-master/3dVPM_2_GitHub
+
+CC=icl
+
+CCFLAGS=-O2 -Qstd=c++11 -Qopenmp -DCOMP_WINDOWS
+ 
+LDFLAGS=/link mkl_intel_lp64_dll.lib mkl_intel_thread_dll.lib mkl_core_dll.lib libiomp5md.lib \
+ Gdi32.lib User32.lib Advapi32.lib Kernel32.lib Ws2_32.lib \
+ $(petsc_dir)/arch-mswin-c-debug/lib/libpetsc.lib
+
+INCLUDES=-I$(petsc_dir)/include\
+ -I$(petsc_dir)/arch-mswin-c-debug/include\
+ -I$(mpi_dir)\
+ -I$(mkl_dir)/include\
+ -I$(HOME_dir)/src
+
+OBJ=$(HOME_dir)/obj
+SRC=$(HOME_dir)/src
+MAIN=$(HOME_dir)/examples
+
+################################################################################
+PROGRAM_CPP=executable
+
+OBJS=\
+ $(OBJ)/surface.obj \
+ $(OBJ)/plot3d.obj \
+ $(OBJ)/vtk_writer.obj \
+ $(OBJ)/solver.obj \
+ $(OBJ)/wake.obj \
+ $(OBJ)/parameters.obj \
+ $(OBJ)/domain.obj \
+ $(OBJ)/matlab_writer.obj \
+ $(OBJ)/wind_turbine.obj
+
+.PHONY: default
+default: exe
+
+#Linking stage for the program
+exe: $(OBJS)
+	@echo "--------------------------------------------------------------------------------------"
+	@echo "Building the program "$(PROGRAM_CPP)
+	@$(CC) -o $(PROGRAM_CPP) $(CCFLAGS) $(OBJS) $(LDFLAGS) $(LOAD_PATH)
+
+#Define the dependencies for each cpp-file
+$(OBJ)/surface.obj: $(SRC)/surface.cpp $(SRC)/surface.hpp $(SRC)/vector3d.h $(SRC)/parameters.hpp
+$(OBJ)/plot3d.obj: $(SRC)/plot3d.cpp $(SRC)/plot3d.hpp $(SRC)/surface.hpp $(SRC)/domain.hpp $(SRC)/vector3d.h
+$(OBJ)/vtk_writer.obj: $(SRC)/vtk_writer.cpp $(SRC)/vtk_writer.hpp $(SRC)/surface.hpp $(SRC)/domain.hpp
+$(OBJ)/solver.obj: $(SRC)/solver.cpp $(SRC)/solver.hpp $(SRC)/surface.hpp $(SRC)/wake.hpp $(SRC)/vtk_writer.hpp $(SRC)/matlab_writer.hpp
+$(OBJ)/wake.obj: $(SRC)/wake.cpp $(SRC)/wake.hpp $(SRC)/surface.hpp
+$(OBJ)/parameters.obj: $(SRC)/parameters.cpp $(SRC)/parameters.hpp
+$(OBJ)/domain.obj: $(SRC)/domain.cpp $(SRC)/domain.hpp $(SRC)/vector3d.h
+$(OBJ)/matlab_writer.obj: $(SRC)/matlab_writer.cpp $(SRC)/matlab_writer.hpp $(SRC)/vector3d.h
+$(OBJ)/wind_turbine.obj: $(MAIN)/wind_turbine.cpp $(SRC)/plot3d.hpp $(SRC)/vtk_writer.hpp $(SRC)/solver.hpp $(SRC)/wake.hpp $(SRC)/domain.hpp
+
+# Compilation rules for cpp-files
+$(OBJ)/%.obj: $(SRC)/%.cpp
+	@cd $(OBJ); $(CC) $(CCFLAGS) $(INCLUDES) -c $<
+
+$(OBJ)/%.obj: $(MAIN)/%.cpp
+	@cd $(OBJ); $(CC) $(CCFLAGS) $(INCLUDES) -c $<
+
+clean:
+	rm -f $(PROGRAM_CPP) $(OBJ)/*

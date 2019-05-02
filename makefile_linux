@@ -1,0 +1,57 @@
+
+petsc_dir=$(HOME)/My_Libraries/petsc-3.10.2
+mpi_dir=/u/yyboeing/Mpi/mpich2-1.1/mpich2-1.1_x86_64
+mkl_dir=/opt/intel/compilers_and_libraries_2018.5.274/linux/mkl/lib/intel64
+
+CC=$(mpi_dir)/bin/mpicxx
+
+CCFLAGS=-O2 -std=c++11 -fopenmp
+
+LIBS=-L$(mpi_dir)/lib\
+ -L$(mkl_dir) -lmkl_core -lmkl_intel_lp64 -lmkl_sequential\
+ -L$(petsc_dir)/arch-linux2-c-debug/lib -lpetsc
+# $(petsc_dir)/arch-linux2-c-debug/lib/libpetsc.a
+ 
+LDFLAGS=$(LIBS) -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lpthread -lm -lX11 -lstdc++ -ldl\
+ -lmpichf90 -lmpich -lopa -lpthread -lifport -lifcoremt -limf -lsvml -lm -lipgo -lirc -lgcc_s -lirc_s -lstdc++ -ldl
+
+INCLUDES=-I$(petsc_dir)/include\
+ -I$(petsc_dir)/arch-linux2-c-debug/include\
+ -I/u/yyboeing/Mpi/mpich2-1.1/mpich2-1.1_x86_64/include\
+ -I/u/n8nywx/Cosimulation/3dVPM-master/src
+
+LOAD_PATH=-Wl,-rpath=$(mpi_dir)/lib:$(petsc_dir)/arch-linux2-c-debug/lib
+
+OBJ=$(HOME)/Cosimulation/3dVPM-master/obj
+SRC=$(HOME)/Cosimulation/3dVPM-master/src
+MAIN=$(HOME)/Cosimulation/3dVPM-master/examples
+
+################################################################################
+PROGRAM_CPP=executable
+
+OBJS=\
+ $(OBJ)/surface.o \
+ $(OBJ)/plot3d.o \
+ $(OBJ)/vtk_writer.o \
+ $(OBJ)/solver.o \
+ $(OBJ)/wake.o \
+ $(OBJ)/parameters.o \
+ $(OBJ)/domain.o \
+ $(OBJ)/matlab_writer.o \
+ $(OBJ)/wind_turbine.o
+
+.PHONY: default
+default: exe
+
+# Compilation rules for cpp-files
+$(OBJ)/%.o: $(SRC)/%.cpp
+	cd $(OBJ); $(CC) $(CCFLAGS) $(INCLUDES) -c $<
+	
+$(OBJ)/%.o: $(MAIN)/%.cpp
+	cd $(OBJ); $(CC) $(CCFLAGS) $(INCLUDES) -c $<
+	
+exe: $(OBJS)
+	$(CC) -o $(PROGRAM_CPP) $(CCFLAGS) $(OBJS) $(LDFLAGS) $(LOAD_PATH)
+
+clean:
+	rm -f $(PROGRAM_CPP) $(OBJ)/*

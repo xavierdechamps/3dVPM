@@ -3,6 +3,8 @@
 
 #include <iostream>
 #include <vector>
+
+#include <iterator>
 #include <string>
 #include <memory>
 #include <cassert>
@@ -43,28 +45,34 @@ public:
         std::ofstream ofile(filename + file_extension, std::ios::app);
 
         if(data.size() == surface->n_nodes())
-            ofile << "POINT_DATA " << surface->nodes.size() << std::endl;
-
+            ofile << "POINT_DATA " << surface->nodes.size() << "\n";
+        
         switch (sizeof(T)) {
         case 4:
-            ofile << "SCALARS " << name << " double 1" << std::endl;
-            ofile << "LOOKUP_TABLE default" << std::endl;
+            ofile << "SCALARS " << name << " double 1\n";
+            ofile << "LOOKUP_TABLE default\n" ;
             break;
         case 8:
-            ofile << "SCALARS " << name << " double 1" << std::endl;
-            ofile << "LOOKUP_TABLE default" << std::endl;
+            ofile << "SCALARS " << name << " double 1\n";
+            ofile << "LOOKUP_TABLE default\n";
             break;
         case 24:
-            ofile << "VECTORS " << name << " double" << std::endl;
+            ofile << "VECTORS " << name << " double\n";
             break;
         default:
-            std::cerr << "UNKNOWN DATATYPE!!!" << std::endl;
+            std::cerr << "UNKNOWN DATATYPE!!!\n";
             break;
         }
 
-        for(int p = 0; p < (int)data.size(); p++)
-            ofile << data[p] << std::endl;
+		std::ostream_iterator<T> osi{ofile,"\n"}; 
+		std::copy( data.begin() , data.end() , osi );
+		
+//        for(int p = 0; p < (int)data.size(); p++) 
+//            ofile << data[p] << "\n";
+//            ofile << data[p] << std::endl; // endl flushes to the file and slows down the writing
         ofile << std::endl;
+		
+		ofile.close();
     }
 
     /** @brief write mesh data to vtk format */
@@ -92,23 +100,24 @@ public:
 
         switch (sizeof(T)) {
         case 4:
-            ofile << "SCALARS " << name << " double 1" << std::endl;
-            ofile << "LOOKUP_TABLE default" << std::endl;
+            ofile << "SCALARS " << name << " double 1\n";
+            ofile << "LOOKUP_TABLE default\n";
             break;
         case 8:
-            ofile << "SCALARS " << name << " double 1" << std::endl;
-            ofile << "LOOKUP_TABLE default" << std::endl;
+            ofile << "SCALARS " << name << " double 1\n";
+            ofile << "LOOKUP_TABLE default\n";
             break;
         case 24:
-            ofile << "VECTORS " << name << " double" << std::endl;
+            ofile << "VECTORS " << name << " double\n";
             break;
         default:
-            std::cerr << "UNKNOWN DATATYPE!!!" << std::endl;
+            std::cerr << "UNKNOWN DATATYPE!!!\n";
             break;
         }
 
         for(int p = 0; p < (int)data.size(); p++)
-            ofile << data[p] << std::endl;
+            ofile << data[p] << "\n";
+//            ofile << data[p] << std::endl;
         ofile << std::endl;
     }
 

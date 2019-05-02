@@ -2,18 +2,17 @@
 
 using namespace std;
 
-Wake::Wake()
-{
+Wake::Wake(){
     lifting_surface = NULL;
 }
 
-Wake::~Wake()
-{
+Wake::~Wake(){
 
 }
 
 void Wake :: add_lifting_surface(const std::shared_ptr<Surface> surf) {
     lifting_surface = surf;
+	cout << "Wake is linked with surface "<<lifting_surface->get_name_surface() << "\n" ;
 }
 
 void Wake :: initialize(const vector3d& free_stream_velocity, const double &dt){
@@ -98,10 +97,12 @@ void Wake :: build_topology(){
 
 void Wake :: shed_wake(const vector3d &free_stream_velocity, double dt){
 
-    assert(nodes.size() > 0);
-
-    // move nodes on trailing edge with local velocity
-    for(int n = nodes.size() - lifting_surface->n_trailing_edge_nodes(); n < (int)nodes.size(); n++ ){
+    int n_nodes = nodes.size();
+    assert(n_nodes > 0);
+    
+// move nodes on trailing edge with local velocity
+// The nodes on the TE are the last being added, so they are indexed between wake->n_nodes() - surface->n_trailing_edge_nodes()   AND   wake->n_nodes()-1
+    for(int n = n_nodes - lifting_surface->n_trailing_edge_nodes(); n < n_nodes; n++ ){
 
         // get node on trailing edge
         vector3d& node = nodes[n];
@@ -128,4 +129,16 @@ void Wake :: shed_wake(const vector3d &free_stream_velocity, double dt){
 
     build_topology();
     compute_panel_components();
+}
+
+void Wake :: push_back_doublet_strength(const double &doublet) {
+    this->doublet_strength.push_back(doublet);
+}
+
+void Wake :: pop_front_double_strength() {
+    this->doublet_strength.erase(doublet_strength.begin());
+}
+
+int Wake :: get_size_doublet_strength() const {
+    return this->doublet_strength.size();
 }

@@ -36,7 +36,7 @@ void vtk_writer :: write_surface_mesh(string filename,std::shared_ptr<Surface> s
     ofile << "POINTS " << total_nodes << " double" << endl;
 
     for(int i = 0; i < (int)surface->nodes.size(); i++)
-        ofile << surface->nodes[i] << endl;
+        ofile << surface->nodes[i] << "\n";
     ofile << endl;
 
     //write cell data
@@ -51,27 +51,28 @@ void vtk_writer :: write_surface_mesh(string filename,std::shared_ptr<Surface> s
     ofile << endl;
 
     //write cell type
-        ofile << "CELL_TYPES " << total_panels << endl;
+    ofile << "CELL_TYPES " << total_panels << endl;
 
-        for(int p = 0; p < (int)surface->panels.size(); p++){
-            int cell_type;
-            switch (surface->panels[p].size()) {
-            case 3:
-                cell_type = 5;
-                break;
-            case 4:
-                cell_type = 9;
-                break;
-            default:
-                cerr << "Panel " << p << ": Unknown cell type." << endl;
-                continue;
-            }
-
-            ofile << cell_type << endl;
+    for(int p = 0; p < (int)surface->panels.size(); p++){
+        int cell_type;
+        switch (surface->panels[p].size()) {
+        case 3:
+            cell_type = 5;
+            break;
+        case 4:
+            cell_type = 9;
+            break;
+        default:
+            cerr << "Panel " << p << ": Unknown cell type." << endl;
+            continue;
         }
-        ofile << endl;
 
-        ofile << "CELL_DATA " << surface->n_panels() << std::endl;
+        ofile << cell_type << "\n";
+    }
+    ofile << endl;
+
+    ofile << "CELL_DATA " << surface->n_panels() << std::endl;
+	ofile.close();
 }
 
 
@@ -95,5 +96,6 @@ void vtk_writer :: write_domain_mesh(std::string filename,std::shared_ptr<Domain
 
     ofile << "POINT_DATA " << domain->nodes.size() << std::endl;
 
+	ofile.close();
 }
 

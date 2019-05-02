@@ -10,6 +10,7 @@
 
 #include "surface.hpp"
 #include "domain.hpp"
+#include "vector3d.h"
 
 /**
    @brief PLOT3D class to read plot3D mesh file and manipulates surface object

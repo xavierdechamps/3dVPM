@@ -28,6 +28,15 @@ public:
     /** @brief decides whether to use vortex core model */
     static bool use_vortex_core_model;
 
+    static double wake_advect_distance;
+    
+    static int max_number_iterations_pressure_TE ;
+    static double max_error_pressure_TE ;
+    
+    static bool switch_off_root_vortex;
+    static bool switch_off_tip_vortex;
+    
+    
 };
 
 

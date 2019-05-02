@@ -57,6 +57,12 @@ public:
     double dot(const vector3d& vec){
         return (_data[0]*vec[0] + _data[1]*vec[1] + _data[2]*vec[2]);
     }
+    
+    void flip() {
+        _data[0] = -_data[0] ;
+        _data[1] = -_data[1] ;
+        _data[2] = -_data[2] ;
+    }
 
     vector3d cross(const vector3d& vec) const {
         vector3d cross;

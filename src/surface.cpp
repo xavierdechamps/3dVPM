@@ -2,17 +2,15 @@
 
 using namespace std;
 
-Surface::Surface()
-    :fourpi(0.25 * M_1_PI)
-{
+Surface::Surface() :fourpi(0.25 * M_1_PI){
     linear_velocity = 0.0;
     angular_velocity = 0.0;
     surface_origin = 0.0;
     surface_orientation = 0.0;
+	name_surface = "name_of_surface";
 }
 
-Surface::~Surface()
-{
+Surface::~Surface(){
 
 }
 
@@ -24,12 +22,13 @@ int Surface :: n_nodes() const{
     return static_cast<int> (nodes.size());
 }
 
-
-void Surface :: compute_panel_components(){
+void Surface :: compute_panel_components(){ // called by rotate_surface() at each time step
 
     assert(nodes.size() > 0 && panels.size() > 0);
 
-    //compute panel normal and areas
+//	cout << "in function compute_panel_components of surface " <<name_surface<<" with size = " <<panel_areas.size()<<endl;
+	
+//compute panel normal and areas
     panel_areas.clear();
     panel_areas.resize(n_panels());
     panel_normals.clear();
@@ -46,11 +45,11 @@ void Surface :: compute_panel_components(){
         } else { // 4 sides
             vector3d AC = nodes[panel_nodes[2]] - nodes[panel_nodes[0]];
             vector3d BD = nodes[panel_nodes[3]] - nodes[panel_nodes[1]];
-            normal = BD.cross(AC);
+            normal = BD.cross(AC); // BD x AC
         }
 
         // panel area
-        panel_areas[p] = normal.norm() / 2.0;
+        panel_areas[p] = normal.norm() * 0.5;
         //cout << panel_areas[p] << endl;
 
         normal.normalize();
@@ -59,13 +58,11 @@ void Surface :: compute_panel_components(){
         //cout << normal << endl;
     }
 
-
-
-    //compute collocation point
+//compute collocation point
     panel_collocation_points.clear();
     panel_collocation_points.resize(n_panels());
 
-    for(int p = 0; p < n_panels(); p++){
+/*    for(int p = 0; p < n_panels(); p++){ // simple method
         vector3d new_cp(0,0,0);
         for(int n = 0; n < (int)panels[p].size(); n++)
             new_cp += nodes[panels[p][n]];
@@ -73,17 +70,54 @@ void Surface :: compute_panel_components(){
         new_cp = new_cp / (double)panels[p].size();
         panel_collocation_points[p] = new_cp;
         //cout << new_cp << endl;
+    }*/
+    
+    for(int p = 0; p < n_panels(); p++){ // precise method: position weighted by the side lengths of the sides
+        vector3d new_cp(0,0,0);
+        vector<int> &panel_nodes = panels[p];
+        
+        vector3d cs1 = (nodes[panel_nodes[0]] + nodes[panel_nodes[1]] ) * 0.5; // center of side 1
+        vector3d vs1 = nodes[panel_nodes[1]] - nodes[panel_nodes[0]] ;
+        double ls1   = vs1.squared_norm(); // length of side 1
+        
+        vector3d cs2 = (nodes[panel_nodes[1]] + nodes[panel_nodes[2]] ) * 0.5; // center of side 2
+        vector3d vs2 = nodes[panel_nodes[2]] - nodes[panel_nodes[1]] ;
+        double ls2   = vs2.squared_norm(); // length of side 2
+        
+        vector3d cs3 = (nodes[panel_nodes[2]] + nodes[panel_nodes[3]] ) * 0.5; // center of side 3
+        vector3d vs3 = nodes[panel_nodes[3]] - nodes[panel_nodes[2]] ;
+        double ls3   = vs3.squared_norm(); // length of side 3
+        
+        double lstot = ls1 + ls2 + ls3; // perimeter of the panel
+        new_cp       = cs1*ls1 + cs2*ls2 + cs3*ls3 ; // finer estimation of the collocation point for triangles
+        
+        vector3d cs4 , vs4;
+        double ls4 =0.;
+        if (panel_nodes.size() == 4){
+            cs4 = (nodes[panel_nodes[3]] + nodes[panel_nodes[0]] ) * 0.5; // center of side 4
+            vs4 = nodes[panel_nodes[0]] - nodes[panel_nodes[3]] ;
+            ls4 = vs4.squared_norm(); // length of side 4
+            lstot += ls4;
+            new_cp += cs4*ls4;
+        }
+              
+        panel_collocation_points[p] = new_cp/lstot;
+        //cout << new_cp << endl;
     }
 
-    // compute transformation
-    panel_longitudinals.clear();
-    panel_longitudinals.resize(n_panels());
-    panel_transverse.clear();
-    panel_transverse.resize(n_panels());
+// compute transformation
+    panel_longitudinals.clear();     panel_longitudinals.resize(n_panels());
+    panel_transverse.clear();        panel_transverse.resize(n_panels());
+    panel_local_coordinates.clear(); panel_local_coordinates.resize(n_panels());
     for(int p = 0; p < n_panels(); p++){
 
         vector3d longitudinal = nodes[panels[p][0]] - nodes[panels[p][1]];
 
+/*        vector3d mid1 = ( nodes[panels[p][0]] + nodes[panels[p][1]] )*0.5;
+        vector3d mid2 = ( nodes[panels[p][2]] + nodes[panels[p][3]] )*0.5;
+        vector3d longitudinal = mid1 - mid2;
+        double leng_longi = longitudinal.norm();*/
+        
         longitudinal.normalize();
 
         panel_longitudinals[p] = longitudinal;
@@ -92,25 +126,28 @@ void Surface :: compute_panel_components(){
         vector3d transverse = panel_normals[p].cross(panel_longitudinals[p]);
         panel_transverse[p] = transverse;
         //cout << transverse << endl;
-    }
-
-    // compute panel local coordinates
-    panel_local_coordinates.clear();
-    panel_local_coordinates.resize(n_panels());
-    for(int p = 0; p < n_panels(); p++){
-
+        
+// compute panel local coordinates
         panel_local_coordinates[p].clear();
         panel_local_coordinates[p].resize(panels[p].size());
-
         for(int n = 0; n < (int)panels[p].size(); n++){
             panel_local_coordinates[p][n] = transform_point_panel(p,nodes[panels[p][n]]);
-            //cout << transformed_point << endl;
         }
-        //cout << endl;
+        
+// Lower the collocation point
+        panel_collocation_points[p] -= panel_normals[p]*1e-8;
+        
+// Translate the collocation point for the panels at the trailing edge        
+/*        if (is_TE_panel.size()>0 && is_TE_panel[p]==1) { // upper surface
+            panel_collocation_points[p] += panel_longitudinals[p] * (0.0001 * leng_longi) ;
+        }
+        else if (is_TE_panel.size()>0 && is_TE_panel[p]==-1) { // lower surface
+            panel_collocation_points[p] -= panel_longitudinals[p] * 0.0001 * leng_longi ;
+        }*/
+            
     }
 
-
-    // compute panel farfield distance
+// compute panel farfield distance
     panel_farfield_distance.clear();
     panel_farfield_distance.resize(n_panels());
     for(int p = 0; p < n_panels(); p++){
@@ -131,7 +168,39 @@ void Surface :: compute_panel_components(){
         panel_farfield_distance[p] = max(d1,d2) * Parameters::farfield_factor;
         //cout << panel_farfield_distance[p] << endl;
     }
+    
+// Update the collocation beam nodes
+    for (int j=0; j<this->beam_nodes_collocation.size(); j++) {
+        this->beam_nodes_collocation[j] = (this->beam_nodes[j] + this->beam_nodes[j+1])*0.5 ;
+    }
+    
+    
+}
 
+void Surface :: compute_neighbour_distances(const int panel, std::vector<vector3d> &dist_neighbours) const{
+    
+    assert(panel>=0);
+    assert(panel<n_panels());
+    
+    dist_neighbours.clear();
+    dist_neighbours.resize(4);
+    for (int i=0;i<4; i++){ // the 4 neighbour panels of the current panel
+        vector3d neighbour = panel_collocation_points[ neighbours_two[panel][i] ] ; // global coordinates of the neighbour panel
+        dist_neighbours[i] = transform_point_panel( panel , neighbour ); // local coordinates of the neighbour panel
+    }
+}
+
+void Surface :: get_local_neighbours(const int panel, std::vector<int> &local_neighbours) const {
+    
+    assert(panel>=0);
+    assert(panel<n_panels());
+    
+    local_neighbours.clear();
+    local_neighbours.resize(4);
+    for (int i=0;i<4; i++){ // the 4 neighbour panels of the current panel
+        local_neighbours[i] = neighbours_two[panel][i] ; 
+    }
+    
 }
 
 vector3d& Surface :: get_collocation_point(int panel) {
@@ -143,7 +212,6 @@ vector3d Surface :: get_collocation_point(int panel) const{
     assert(panel < (int)panels.size());
     return panel_collocation_points[panel];
 }
-
 
 vector3d Surface :: transform_point_panel(int panel, const vector3d& x) const{
     vector3d transformed_point, diff;
@@ -164,7 +232,6 @@ vector3d Surface :: transform_point_panel(int panel, const vector3d& x) const{
 
 }
 
-
 void Surface :: translate_surface(const vector3d& dX){
 
     for(size_t n = 0; n < nodes.size(); n++)
@@ -178,18 +245,14 @@ void Surface :: translate_surface(const vector3d& dX){
     compute_panel_components();
 }
 
-
 void Surface :: rotate_surface(vector3d dTheta, bool isRadian){
-
 
     if(!isRadian){
         dTheta = dTheta * (M_PI/180.0);
     }
 
     for(size_t n = 0; n < nodes.size(); n++){
-
         vector3d old_x = nodes[n];
-
         nodes[n][0] = cos(dTheta[1])*cos(dTheta[2])*old_x[0]
                     + cos(dTheta[1])*sin(dTheta[2])*old_x[1]
                     - sin(dTheta[1])*old_x[2];
@@ -202,6 +265,36 @@ void Surface :: rotate_surface(vector3d dTheta, bool isRadian){
                     + (cos(dTheta[0])*sin(dTheta[1])*sin(dTheta[2]) - sin(dTheta[0])*cos(dTheta[2]))*old_x[1]
                     + cos(dTheta[0])*cos(dTheta[1])*old_x[2];
     }
+    
+    for (size_t n = 0; n < beam_nodes.size(); n++){
+        vector3d old_x = beam_nodes[n];
+        beam_nodes[n][0] = cos(dTheta[1])*cos(dTheta[2])*old_x[0]
+                         + cos(dTheta[1])*sin(dTheta[2])*old_x[1]
+                         - sin(dTheta[1])*old_x[2];
+
+        beam_nodes[n][1] = (sin(dTheta[0])*sin(dTheta[1])*cos(dTheta[2]) - cos(dTheta[0])*sin(dTheta[2]))*old_x[0]
+                         + (sin(dTheta[0])*sin(dTheta[1])*sin(dTheta[2]) + cos(dTheta[0])*cos(dTheta[2]))*old_x[1]
+                         + sin(dTheta[0])*cos(dTheta[1])*old_x[2];
+
+        beam_nodes[n][2] = (cos(dTheta[0])*sin(dTheta[1])*cos(dTheta[2]) + sin(dTheta[0])*sin(dTheta[2]))*old_x[0]
+                         + (cos(dTheta[0])*sin(dTheta[1])*sin(dTheta[2]) - sin(dTheta[0])*cos(dTheta[2]))*old_x[1]
+                         + cos(dTheta[0])*cos(dTheta[1])*old_x[2];
+    }
+    
+    for (size_t n = 0; n < beam_nodes_collocation.size(); n++){
+        vector3d old_x = beam_nodes_collocation[n];
+        beam_nodes_collocation[n][0] = cos(dTheta[1])*cos(dTheta[2])*old_x[0]
+                                     + cos(dTheta[1])*sin(dTheta[2])*old_x[1]
+                                     - sin(dTheta[1])*old_x[2];
+
+        beam_nodes_collocation[n][1] = (sin(dTheta[0])*sin(dTheta[1])*cos(dTheta[2]) - cos(dTheta[0])*sin(dTheta[2]))*old_x[0]
+                                     + (sin(dTheta[0])*sin(dTheta[1])*sin(dTheta[2]) + cos(dTheta[0])*cos(dTheta[2]))*old_x[1]
+                                     + sin(dTheta[0])*cos(dTheta[1])*old_x[2];
+
+        beam_nodes_collocation[n][2] = (cos(dTheta[0])*sin(dTheta[1])*cos(dTheta[2]) + sin(dTheta[0])*sin(dTheta[2]))*old_x[0]
+                                     + (cos(dTheta[0])*sin(dTheta[1])*sin(dTheta[2]) - sin(dTheta[0])*cos(dTheta[2]))*old_x[1]
+                                     + cos(dTheta[0])*cos(dTheta[1])*old_x[2];
+    }
 
     // update surface orientation
     previous_surface_orientation = surface_orientation;
@@ -211,6 +304,64 @@ void Surface :: rotate_surface(vector3d dTheta, bool isRadian){
     compute_panel_components();
 }
 
+void Surface :: rotate_section_about_arbitrary_point(const vector3d center, const vector3d dTheta,const int section, const bool isRadian) {
+// Rotate the whole section at a given span about the point "center" around the vector "dTheta" which also gives the amplitude of the rotation
+// Don't forget to update the normals by calling afterwards compute_panel_components()
+    assert(section>=0);
+    assert(section<JMAX);
+    
+    if(!isRadian){
+        dTheta = dTheta * (M_PI/180.0);
+    }
+    
+    int start_node = section*IMAX;
+    int end_node = start_node + IMAX - 1 ;
+    vector3d old_x;
+    for (int i=start_node;i<=end_node;i++) {
+         old_x = nodes[i];
+        
+// First translate to the origin
+         old_x -= center;
+//         cout << old_x << " / " << center << endl;
+
+// Then rotate around the origin
+         nodes[i][0] = cos(dTheta[1])*cos(dTheta[2])*old_x[0]
+                     + cos(dTheta[1])*sin(dTheta[2])*old_x[1]
+                     - sin(dTheta[1])*old_x[2];
+
+         nodes[i][1] = (sin(dTheta[0])*sin(dTheta[1])*cos(dTheta[2]) - cos(dTheta[0])*sin(dTheta[2]))*old_x[0]
+                     + (sin(dTheta[0])*sin(dTheta[1])*sin(dTheta[2]) + cos(dTheta[0])*cos(dTheta[2]))*old_x[1]
+                     + sin(dTheta[0])*cos(dTheta[1])*old_x[2];
+
+         nodes[i][2] = (cos(dTheta[0])*sin(dTheta[1])*cos(dTheta[2]) + sin(dTheta[0])*sin(dTheta[2]))*old_x[0]
+                     + (cos(dTheta[0])*sin(dTheta[1])*sin(dTheta[2]) - sin(dTheta[0])*cos(dTheta[2]))*old_x[1]
+                     + cos(dTheta[0])*cos(dTheta[1])*old_x[2];
+//         cout << old_x << " / " << nodes[i] << endl;
+
+// Then translate back to the correct span position
+         nodes[i] += center;
+    }
+    
+//    cout << beam_nodes[section] << " / " ;
+    
+// Perform the same operations for the beam node of the current section
+    old_x = beam_nodes[section];
+    old_x -= center;
+    beam_nodes[section][0] = cos(dTheta[1])*cos(dTheta[2])*old_x[0]
+                           + cos(dTheta[1])*sin(dTheta[2])*old_x[1]
+                           - sin(dTheta[1])*old_x[2];
+
+    beam_nodes[section][1] = (sin(dTheta[0])*sin(dTheta[1])*cos(dTheta[2]) - cos(dTheta[0])*sin(dTheta[2]))*old_x[0]
+                           + (sin(dTheta[0])*sin(dTheta[1])*sin(dTheta[2]) + cos(dTheta[0])*cos(dTheta[2]))*old_x[1]
+                           + sin(dTheta[0])*cos(dTheta[1])*old_x[2];
+
+    beam_nodes[section][2] = (cos(dTheta[0])*sin(dTheta[1])*cos(dTheta[2]) + sin(dTheta[0])*sin(dTheta[2]))*old_x[0]
+                           + (cos(dTheta[0])*sin(dTheta[1])*sin(dTheta[2]) - sin(dTheta[0])*cos(dTheta[2]))*old_x[1]
+                           + cos(dTheta[0])*cos(dTheta[1])*old_x[2];
+    beam_nodes[section] += center;
+    
+//    cout << beam_nodes[section] << endl;
+}
 
 void Surface :: set_linear_velocity(const vector3d& vel){
     linear_velocity = vel;
@@ -229,7 +380,6 @@ void Surface :: set_angular_velocity(vector3d vel, bool isRadian_sec){
 
 }
 
-
 int Surface :: n_trailing_edge_nodes() const {
     assert(trailing_edge_nodes.size() > 0);
     return static_cast<int>(trailing_edge_nodes.size());
@@ -239,7 +389,6 @@ int Surface :: n_trailing_edge_panels() const {
     assert(upper_TE_panels.size() > 0);
     return static_cast<int>(upper_TE_panels.size());
 }
-
 
 vector3d Surface :: get_trailing_edge_bisector(const int TE_node) const {
 
@@ -268,7 +417,6 @@ vector3d Surface :: get_trailing_edge_bisector(const int TE_node) const {
     return bisector;
 }
 
-
 vector3d Surface :: get_kinematic_velocity(const vector3d& x) const {
 
     vector3d r = surface_origin - x;
@@ -279,6 +427,13 @@ vector3d Surface :: get_panel_normal(const int i) const{
     return panel_normals[i];
 }
 
+vector3d Surface :: get_panel_longitudinal(const int i) const{
+    return panel_longitudinals[i];
+}
+
+vector3d Surface :: get_panel_transverse(const int i) const{
+    return panel_transverse[i];
+}
 
 double Surface :: compute_source_panel_influence(const int panel, const vector3d& node) const{
 
@@ -304,7 +459,6 @@ double Surface :: compute_source_panel_influence(const int panel, const vector3d
 
     return -influence*fourpi;
 }
-
 
 double Surface :: compute_source_edge_influence(const vector3d& node_a,const vector3d& node_b,const vector3d& x) const{
 
@@ -339,8 +493,6 @@ double Surface :: compute_source_edge_influence(const vector3d& node_a,const vec
     return influence;
 }
 
-
-
 double Surface :: compute_doublet_panel_influence(const int panel, const vector3d& node) const {
 
     vector3d transformed_node = transform_point_panel(panel,node);
@@ -366,7 +518,6 @@ double Surface :: compute_doublet_panel_influence(const int panel, const vector3
     return influence*fourpi;
 }
 
-
 double Surface :: compute_doublet_edge_influence(const vector3d& node_a,const vector3d& node_b,const vector3d& x) const{
 
     double influence = 0;
@@ -387,7 +538,6 @@ double Surface :: compute_doublet_edge_influence(const vector3d& node_a,const ve
 
     return influence;
 }
-
 
 std::pair<double,double> Surface :: compute_source_doublet_panel_influence(const int panel, const vector3d& node) const {
 
@@ -424,7 +574,6 @@ std::pair<double,double> Surface :: compute_source_doublet_panel_influence(const
 
     return influence_coefficient;
 }
-
 
 std::pair<double,double> Surface :: compute_source_doublet_edge_influence(const vector3d& node_a,const vector3d& node_b,const vector3d& x) const {
 
@@ -464,7 +613,6 @@ std::pair<double,double> Surface :: compute_source_doublet_edge_influence(const 
     return edge_influence;
 }
 
-
 vector3d Surface :: transform_vector_panel_inverse(int panel, const vector3d& x) const{
 
     vector3d transformed_vector;
@@ -495,11 +643,9 @@ vector3d Surface :: transform_vector_panel(int panel, const vector3d& x) const{
     return transformed_vector;
 }
 
-
 double Surface :: get_panel_area(const int& panel) const{
     return panel_areas[panel];
 }
-
 
 vector3d Surface :: compute_source_panel_unit_velocity(const int& panel, const vector3d& node) const{
 
@@ -544,7 +690,6 @@ vector3d Surface :: compute_source_panel_unit_velocity(const int& panel, const v
     return panel_velocity * fourpi;
 }
 
-
 vector3d Surface :: compute_source_panel_edge_unit_velocity(const vector3d& node_a,const vector3d& node_b,const vector3d& x) const{
 
     vector3d edge_velocity(0,0,0);
@@ -573,9 +718,7 @@ vector3d Surface :: compute_source_panel_edge_unit_velocity(const vector3d& node
     return edge_velocity;
 }
 
-
-
-vector3d Surface :: compute_doublet_panel_unit_velocity(const int& panel, const vector3d& node) const{
+vector3d Surface :: compute_doublet_panel_unit_velocity(const int& panel, const vector3d& node, const double time) const{
 
     vector3d panel_velocity(0,0,0);
 
@@ -608,14 +751,13 @@ vector3d Surface :: compute_doublet_panel_unit_velocity(const int& panel, const 
         const vector3d& node_b = nodes[panels[panel][n]];
 
         // send nodes in global coordinates (not in panel local coordinates)
-        panel_velocity -= compute_doublet_panel_edge_unit_velocity(node_a, node_b, node);
+        panel_velocity -= compute_doublet_panel_edge_unit_velocity(node_a, node_b, node, time);
     }
 
     return panel_velocity;
 }
 
-
-vector3d Surface :: compute_doublet_panel_edge_unit_velocity(const vector3d& node_a,const vector3d& node_b,const vector3d& x) const{
+vector3d Surface :: compute_doublet_panel_edge_unit_velocity(const vector3d& node_a,const vector3d& node_b,const vector3d& x, const double time) const{
 
     // computes velocity using vortex line method
 
@@ -632,7 +774,8 @@ vector3d Surface :: compute_doublet_panel_edge_unit_velocity(const vector3d& nod
 
     r1 = (x - node_a).norm();
     r2 = (x - node_b).norm();
-
+    
+    
     if( r1 > Parameters::inversion_tolerance && r2 > Parameters::inversion_tolerance && r1r2_sq > Parameters::inversion_tolerance ){
 
         r0r1 = (node_b[0] - node_a[0])*(x[0] - node_a[0]) + (node_b[1] - node_a[1])*(x[1] - node_a[1]) + (node_b[2] - node_a[2])*(x[2] - node_a[2]);
@@ -640,12 +783,18 @@ vector3d Surface :: compute_doublet_panel_edge_unit_velocity(const vector3d& nod
 
         double Kv = 1.0;
         if(Parameters::use_vortex_core_model){
-            double vm = 1.0;    /* decides vortex core model, vm = 1 == rankine model, vm = 2 == scully vortex model */
+            
+            double alpha = 1.25643 ;
+            double deltav = 10 ;
+            double visc = 0.000014657 ; // value of kinematic viscosity nu of air at temperature T = 15 degrees
+    
+            double vm = 2.0;    /* decides vortex core model, vm = 1 == rankine model, vm = 2 == scully vortex model */
             /* h = perpendicular dist of x from line joining x1 and x2,
              * more details: http://mathworld.wolfram.com/Point-LineDistance3-Dimensional.html */
             double h = sqrt(r1r2_sq) / sqrt(pow((node_b[0]-node_a[0]),2) + pow((node_b[1]-node_a[1]),2) + pow((node_b[2]-node_a[2]),2));
-            //rc = sqrt(4*alpha*deltav*visc*t);
-            double rc = 0.003;
+            
+            double rc = sqrt(4*alpha*deltav*visc*time);
+            //double rc = 0.003;
 
             /* Kv : parameter to disingularize biot savart law,
              * refer to: Estimating the Angle of Attack from Blade Pressure Measurements on the
@@ -664,6 +813,20 @@ vector3d Surface :: compute_doublet_panel_edge_unit_velocity(const vector3d& nod
     return edge_velocity;
 }
 
+void Surface::set_name_surface(const std::string name) {
+	this->name_surface = name;
+}
 
+std::string Surface::get_name_surface() const {
+	return this->name_surface;
+}
 
+void Surface::set_IMAX_JMAX(const int im, const int jm) {
+    this->IMAX = im;
+    this->JMAX = jm;
+}
 
+void Surface::get_IMAX_JMAX(int &im, int &jm) const {
+    im = this->IMAX;
+    jm = this->JMAX;
+}
