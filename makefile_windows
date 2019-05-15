@@ -5,7 +5,7 @@ mpi_dir=$(D_drive)/Libraries/impi
 mkl_dir=$(C_drive)/Progra~2/Intel/IntelSWTools/compilers_and_libraries_2018.1.156/windows/mkl
 #mkl_dir=$(C_drive)/Progra~2/Intel/IntelSWTools/compilers_and_libraries_2018.1.156/windows/mkl/lib/intel64_win
 
-HOME_dir=$(D_drive)/FSI/3dVPM-master/3dVPM_2_GitHub
+HOME_dir=$(D_drive)/FSI/3dVPM-master
 
 CC=icl
 
